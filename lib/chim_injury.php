@@ -10,7 +10,7 @@ if (defined('CHIM_INJURY_VERSION')) {
     return;
 }
 
-define('CHIM_INJURY_VERSION', '0.1.0');
+define('CHIM_INJURY_VERSION', '0.1.1');
 define('CHIM_INJURY_PLUGIN', 'chim_injury_framework');
 define('CHIM_INJURY_TABLE', 'plugins.chim_injury_settings');
 define('CHIM_INJURY_LOG_TABLE', 'plugins.chim_injury_log');

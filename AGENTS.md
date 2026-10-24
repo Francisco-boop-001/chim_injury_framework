@@ -6,7 +6,7 @@ This repository is the source of a CHIM add-on. It has two parts.
 |---|---|---|
 | SKSE plugin (C++, CommonLibSSE-NG) | `SkyrimPlugin/` | `Data/SKSE/Plugins/CHIMInjury.dll` + `.ini` |
 | HerikaServer plugin (PHP) | repository root (`prerequest.php`, `context_pre.php`, `index.php`, `lib/`, `api/`, `migrations/`, `images/`, `manifest.json`) | `HerikaServer/ext/chim_injury_framework/` |
-| Overlay textures (optional, only with the texture author's permission) | `Textures/actors/character/CHIMInjury/{Female,Male}/*.dds` | `Data/textures/actors/character/CHIMInjury/...` |
+| Overlay textures (JaySerpa, used with permission; not MIT) | `Textures/actors/character/CHIMInjury/{Female,Male}/*.dds` | `Data/textures/actors/character/CHIMInjury/...` |
 
 ## Contracts to preserve
 
@@ -41,4 +41,4 @@ Bump the same version in:
 - `php tests/server_policy_test.php`.
 - CI must build the DLL.
 - Report in-game testing separately from build results. A successful build does not prove that wounds appear in Skyrim.
-- Never commit API keys, saves, logs or textures without the texture author's permission.
+- Never commit API keys, saves or logs.

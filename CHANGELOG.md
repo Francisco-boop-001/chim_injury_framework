@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Wound textures included (Wounds Overlays For RaceMenu by JaySerpa, used with permission; male versions converted to the male UV). Wounds are now drawn on the body when RaceMenu is installed.
+
 ## 0.1.0 (first test version)
 
 - Wounds for the player and followers (followers are found automatically, no NFF needed; summons are ignored).

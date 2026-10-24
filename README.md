@@ -8,9 +8,7 @@ CHIM Injury Framework is an add-on for [CHIM](https://www.nexusmods.com/skyrimsp
 
 > "Hold still. That cut on your arm is still bleeding, and I'm not carrying you back to Whiterun."
 
-> **Status: 0.1.0, first test version.** In-game testing on Nolvus (Skyrim AE) is in progress. Please report results (see [Feedback](#feedback)).
->
-> **The wound textures are not in the download yet:** they will be added as soon as their author gives permission. Until then wounds are tracked, healed and known to NPCs, but not drawn on the body.
+> **Status: 0.1.1, first test version.** In-game testing on Nolvus (Skyrim AE) is in progress. Please report results (see [Feedback](#feedback)).
 
 ## ⬇ Download
 
@@ -143,6 +141,6 @@ Please open an [issue](https://github.com/Marcius3d/chim_injury_framework/issues
 ## Credits and licence
 
 - Code: MIT licence (see `LICENSE`), by Marcius3d. And Santa's little helper Claude.
-- Wound textures: **[Wounds Overlays For RaceMenu](https://www.nexusmods.com/skyrimspecialedition/mods/38547)** by **JaySerpa** (included only with the author's permission); wound photo from the [bmastock stock image](https://www.deviantart.com/bmastock/art/Wound-01-458522921). The male versions were converted from them to the male UV. The textures are **not** under the MIT licence: do not reuse them elsewhere, sell them or use them for Donation Points.
+- Wound textures: **[Wounds Overlays For RaceMenu](https://www.nexusmods.com/skyrimspecialedition/mods/38547)** by **JaySerpa**, used and modified with the author's permission; wound photo from the [bmastock stock image](https://www.deviantart.com/bmastock/art/Wound-01-458522921). The male versions were converted from them to the male UV. The textures are **not** under the MIT licence: do not reuse them elsewhere, sell them or use them for Donation Points.
 - Inspired by [Injury Engine](https://github.com/GoodProvider/Injury_Engine) by GoodProvider (SkyrimNet, MIT): the idea of wound type, body region and severity from the hit. No code or assets are taken from it.
 - [CHIM](https://www.nexusmods.com/skyrimspecialedition/mods/126330) by Dwemer Dynamics, [RaceMenu](https://www.nexusmods.com/skyrimspecialedition/mods/19080) by expired6978, CommonLibSSE-NG.
