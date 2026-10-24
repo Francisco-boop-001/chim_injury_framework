@@ -1,0 +1,22 @@
+{
+  "name": "chim_injury_framework",
+  "display_name": "CHIM Injury Framework",
+  "description": "Wounds for the player and followers: shown on the body (RaceMenu), healed by time, magic and rest, and known to every NPC nearby.",
+  "version": "0.1.0",
+  "schema_version": 2,
+  "config_url": "/HerikaServer/ext/chim_injury_framework/index.php",
+  "config_url_target": "_blank",
+  "git_repo": "Marcius3d/chim_injury_framework",
+  "mod_download_url": "https://github.com/Marcius3d/chim_injury_framework/releases/latest/download/CHIM-Injury-Framework.zip",
+  "default_channel": "main",
+  "channels": {
+    "main": {
+      "label": "Live",
+      "branch": "main",
+      "package_source": "release",
+      "package_urls": [
+        "https://github.com/Marcius3d/chim_injury_framework/releases/latest/download/chim_injury_framework.tar.gz"
+      ]
+    }
+  }
+}

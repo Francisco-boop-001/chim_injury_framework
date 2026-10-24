@@ -1,0 +1,121 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach the MO2 zip to this existing release tag (optional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP lint
+        run: for f in *.php lib/*.php api/*.php tests/*.php; do php -l "$f"; done
+      - name: Policy tests
+        run: php tests/server_policy_test.php
+      - name: Version check
+        run: python3 scripts/build_packages.py --check-only
+
+  build:
+    name: Build DLL and packages
+    needs: server
+    runs-on: windows-2022
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the runner's vcpkg
+        shell: pwsh
+        run: |
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+
+      - name: Restore vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('SkyrimPlugin/vcpkg.json', 'SkyrimPlugin/vcpkg-configuration.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        working-directory: SkyrimPlugin
+        run: cmake --preset release
+
+      - name: Save vcpkg packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('SkyrimPlugin/vcpkg.json', 'SkyrimPlugin/vcpkg-configuration.json') }}
+
+      - name: Build
+        working-directory: SkyrimPlugin
+        run: cmake --build --preset release
+
+      - name: Package
+        shell: pwsh
+        run: python scripts/build_packages.py --dll SkyrimPlugin/build/release/CHIMInjury.dll
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHIM-Injury-Framework-build
+          path: |
+            dist/*
+            SkyrimPlugin/build/release/CHIMInjury.pdb
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content manifest.json -Raw | ConvertFrom-Json).version
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Attach files to the release
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
+          files: dist/*
+          make_latest: true
+          body: |
+            ## Download
+
+            **Mod Organizer 2 / Vortex:** [CHIM-Injury-Framework-${{ steps.version.outputs.version }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}/CHIM-Injury-Framework-${{ steps.version.outputs.version }}.zip)
+            Install it with *Install a new mod from an archive*. CHIM installs the server part automatically on the next game start.
+
+            Always the newest version: https://github.com/${{ github.repository }}/releases/latest/download/CHIM-Injury-Framework.zip
+
+            | File | What it is |
+            |---|---|
+            | `CHIM-Injury-Framework-${{ steps.version.outputs.version }}.zip` / `CHIM-Injury-Framework.zip` | **The mod for MO2/Vortex** (DLL, INI, textures if included and the embedded server package) |
+            | `chim_injury_framework-${{ steps.version.outputs.version }}.dwpkg` | Server package only (CHIM installs it automatically) |
+            | `chim-plugin.tar.gz` | Server files for CHIM's *Plugin Manager* (installs into `ext/chim_injury_framework`) |
+            | `chim_injury_framework.tar.gz` | Server files for older CHIM versions (*Server Plugins* update button) |
+            | Source code | Not needed to play |
+
+            What changed: see [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md).

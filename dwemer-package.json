@@ -1,0 +1,9 @@
+{
+  "schema_version": 4,
+  "name": "chim_injury_framework",
+  "version": "0.1.0",
+  "description": "CHIM Injury Framework server plugin.",
+  "server": {
+    "mutable_paths": []
+  }
+}
