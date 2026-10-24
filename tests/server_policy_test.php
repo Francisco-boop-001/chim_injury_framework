@@ -107,6 +107,10 @@ check('game log stored with level', count(array_filter($GLOBALS['db']->log, fn($
 $stored = chimInjuryGameState($settings, true);
 check('state stored', count($stored['actors']) === 3 && $stored['actors'][1]['wounds'][0]['severity'] === 3);
 check('stale state ignored in prompts', chimInjuryGameState($settings, true, time() + 3600)['actors'] === []);
+// A name from a non-UTF-8 string table (here cp1252 "é") must not sink the whole report.
+$latin1 = str_replace('Bandit Chief', "Bandit Chief Andr\xE9", $body);
+check('non-UTF-8 name accepted', chimInjuryHandleStatus($latin1) === null);
+check('non-UTF-8 name kept readable', str_contains((string)chimInjuryGetSettings()['game_state'], "Bandit Chief Andr\u{FFFD}"));
 
 // --- prompt text ----------------------------------------------------------------------------
 check('wound text', chimInjuryWoundText($stored['actors'][1]['wounds'][0]) === 'deep gash <b> on the left arm (untreated, bleeding)');

@@ -319,7 +319,8 @@ function chimInjuryHandleStatus(string $body): ?string
         return 'too_large';
     }
     try {
-        $data = json_decode($body, true, 32, JSON_THROW_ON_ERROR);
+        // Game strings are not always UTF-8; one odd name must not drop the whole report.
+        $data = json_decode($body, true, 32, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     } catch (Throwable $e) {
         return 'invalid_json';
     }

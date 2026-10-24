@@ -413,11 +413,56 @@ namespace
     // ------------------------------------------------------------------------------------
     // HTTP to the server plugin (settings and commands in, status, wounds and log tail out).
     // ------------------------------------------------------------------------------------
+    // Length of the valid UTF-8 sequence starting at in[i], or 0 if the bytes there are not one.
+    // Game strings come from localized string tables and are not always UTF-8.
+    std::size_t Utf8SequenceLength(const std::string& in, std::size_t i)
+    {
+        const auto b = [&](std::size_t k) { return static_cast<unsigned char>(in[k]); };
+        const unsigned char c = b(i);
+        std::size_t len = 0;
+        unsigned char lo = 0x80, hi = 0xBF;  // allowed range of the second byte
+        if (c >= 0xC2 && c <= 0xDF) {
+            len = 2;
+        } else if (c >= 0xE0 && c <= 0xEF) {
+            len = 3;
+            if (c == 0xE0) lo = 0xA0;  // overlong
+            if (c == 0xED) hi = 0x9F;  // surrogates
+        } else if (c >= 0xF0 && c <= 0xF4) {
+            len = 4;
+            if (c == 0xF0) lo = 0x90;  // overlong
+            if (c == 0xF4) hi = 0x8F;  // above U+10FFFF
+        } else {
+            return 0;
+        }
+        if (i + len > in.size() || b(i + 1) < lo || b(i + 1) > hi) {
+            return 0;
+        }
+        for (std::size_t k = 2; k < len; ++k) {
+            if (b(i + k) < 0x80 || b(i + k) > 0xBF) {
+                return 0;
+            }
+        }
+        return len;
+    }
+
+    // Always returns valid UTF-8: bytes that are not become U+FFFD, so one odd name
+    // cannot make the server throw away the whole status report.
     std::string JsonEscape(const std::string& in)
     {
         std::string out;
         out.reserve(in.size() + 8);
-        for (unsigned char c : in) {
+        for (std::size_t i = 0; i < in.size(); ++i) {
+            const auto c = static_cast<unsigned char>(in[i]);
+            if (c >= 0x80) {
+                const std::size_t len = Utf8SequenceLength(in, i);
+                if (len == 0) {
+                    out += "\xEF\xBF\xBD";
+                } else {
+                    out.append(in, i, len);
+                    i += len - 1;
+                }
+                continue;
+            }
             switch (c) {
             case '"': out += "\\\""; break;
             case '\\': out += "\\\\"; break;
