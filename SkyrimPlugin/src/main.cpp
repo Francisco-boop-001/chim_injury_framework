@@ -846,7 +846,9 @@ namespace
             name = cut ? "Wounds_Chest" : "Wounds_Torso_Bruises";
             break;
         case Region::kBack:
-            name = cut ? (w.severity <= 1 ? "Wounds_Smaller_Back" : "Wounds_Back_Long") : "Wounds_Torso_Bruises";
+            // Wounds_Torso_Bruises sits on the front and side of the torso, so back bruises and burns
+            // use the small back texture, tinted (ColorFor).
+            name = cut && w.severity > 1 ? "Wounds_Back_Long" : "Wounds_Smaller_Back";
             break;
         case Region::kLeftArm:
             name = cut ? (w.severity <= 1 ? "Wounds_Arm_Left_Small" : "Wounds_Arm_Left_Long") : "Wounds_Arm_Left_Bruise";
@@ -866,9 +868,10 @@ namespace
         return std::format("{}{}\\{}.dds", kTextureRoot, female ? "Female" : "Male", name);
     }
 
-    std::int32_t ColorFor(WType type)
+    std::int32_t ColorFor(Region region, WType type)
     {
         switch (type) {
+        case WType::kBlunt: return region == Region::kBack ? 0xA07890 : 0xFFFFFF;  // back: tinted abrasion texture
         case WType::kBurn: return 0xD9773F;
         case WType::kFrost: return 0x8FB8FF;
         case WType::kShock: return 0xC8A8FF;
@@ -910,7 +913,7 @@ namespace
             want.region = region;
             want.texture = TextureFor(region, *w, it->second.female);
             want.alpha = AlphaFor(*w);
-            want.color = ColorFor(w->type);
+            want.color = ColorFor(region, w->type);
             want.priority = rank(*w);
             if (!want.texture.empty() && textures.insert(ToLower(want.texture)).second) {
                 out.push_back(std::move(want));
