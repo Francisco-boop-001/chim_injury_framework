@@ -10,7 +10,7 @@ if (defined('CHIM_INJURY_VERSION')) {
     return;
 }
 
-define('CHIM_INJURY_VERSION', '0.1.2');
+define('CHIM_INJURY_VERSION', '0.1.3');
 define('CHIM_INJURY_PLUGIN', 'chim_injury_framework');
 define('CHIM_INJURY_TABLE', 'plugins.chim_injury_settings');
 define('CHIM_INJURY_LOG_TABLE', 'plugins.chim_injury_log');
@@ -43,6 +43,8 @@ function chimInjuryGameKeys(): array
         'heal_min_amount' => 'float',
         'min_sleep_hours' => 'float',
         'overlay_strength' => 'int',
+        'animations' => 'bool',
+        'anim_min_severity' => 'int',
     ];
 }
 
@@ -69,6 +71,8 @@ function chimInjuryDefaults(): array
         'heal_min_amount' => '15',
         'min_sleep_hours' => '6',
         'overlay_strength' => '100',
+        'animations' => '1',
+        'anim_min_severity' => '2',
         // Prompt (server only)
         'inject_self' => '1',
         'inject_nearby' => '1',

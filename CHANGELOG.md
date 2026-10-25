@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Support for wound animation packs: when `CHIMInjury_Animations.esp` (keywords only) is installed, wounded people get state keywords (concussion, broken skull, torso cut, broken ribs, cut / broken / splinted arms and legs) that OAR/DAR conditions can use. Works for the player and followers. Settings: on/off and from which severity (default medium).
+- `tools/make_anim_plugin.py` writes that keyword plugin.
+
 ## 0.1.2
 
 - Fixed: bruises, burns, frostbite and shock burns on the back were drawn on the front and side of the torso. They now use the back texture, tinted.

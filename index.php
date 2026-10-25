@@ -46,7 +46,7 @@ function ciHealsIn(array $w): string
     return 'in about ' . number_format($days, 1) . ' days';
 }
 
-const CI_BOOLS = ['enabled', 'debug', 'track_player', 'track_followers', 'show_overlays', 'show_on_player', 'notifications', 'log_to_chim',
+const CI_BOOLS = ['enabled', 'debug', 'track_player', 'track_followers', 'show_overlays', 'show_on_player', 'animations', 'notifications', 'log_to_chim',
     'inject_self', 'inject_nearby'];
 // key => [min, max, integer]
 const CI_NUMBERS = [
@@ -61,6 +61,7 @@ const CI_NUMBERS = [
     'heal_min_amount' => [0, 1000, false],
     'min_sleep_hours' => [0, 24, false],
     'overlay_strength' => [10, 100, true],
+    'anim_min_severity' => [1, 3, true],
 ];
 const CI_TEXTS = ['self_template', 'nearby_template'];
 
@@ -213,6 +214,11 @@ usort($actors, static fn($a, $b) => [empty($a['player']), -count($a['wounds'] ??
           <?php if ((int)($status['overlay_slots_short'] ?? 0) > 0): ?> <span class="warnc">(sometimes not enough free slots, see the hint below)</span><?php endif; ?>
         <?php else: ?><span class="bad">not found</span> <span class="muted">wounds work, but are not drawn on the body</span><?php endif; ?>
       </td></tr>
+      <tr><td>Wound animations</td><td>
+        <?php if ($statusTs === 0): ?><span class="muted">unknown</span>
+        <?php elseif (!empty($status['anim_plugin'])): ?><span class="good">animation pack found</span> <span class="muted">(CHIMInjury_Animations.esp, <?= (int)($status['anim_actors'] ?? 0) ?> wounded people use it now)</span>
+        <?php else: ?><span class="muted">no animation pack (optional)</span><?php endif; ?>
+      </td></tr>
       <tr><td>This session: hits checked / wounds / healed (magic, rest, time)</td><td><?= (int)($status['hits_seen'] ?? 0) ?> / <?= (int)($status['wounds_made'] ?? 0) ?> / <?= (int)($status['healed_magic'] ?? 0) ?>, <?= (int)($status['healed_rest'] ?? 0) ?>, <?= (int)($status['healed_time'] ?? 0) ?></td></tr>
       <tr><td>Events saved to CHIM memory / prompts with injuries</td><td><?= ciH($settings['stat_events']) ?> / <?= ciH($settings['stat_injected']) ?></td></tr>
       <?php if ($pending > 0): ?><tr><td>Commands waiting for the game</td><td><?= $pending ?></td></tr><?php endif; ?>
@@ -274,11 +280,15 @@ usort($actors, static fn($a, $b) => [empty($a['player']), -count($a['wounds'] ??
     </section>
 
     <section>
-      <h2>On the body (RaceMenu)</h2>
+      <h2>On the body (RaceMenu, animations)</h2>
       <label class="check"><input type="checkbox" name="show_overlays" value="1" <?= ciChecked($settings, 'show_overlays') ?>> Draw wounds on the body<?= ciDefOnOff('show_overlays') ?></label>
       <label class="check"><input type="checkbox" name="show_on_player" value="1" <?= ciChecked($settings, 'show_on_player') ?>> Also on the player<?= ciDefOnOff('show_on_player') ?></label>
       <div class="row">
         <div><label>Strength (%)<?= ciDef('overlay_strength', ' %') ?></label><input type="number" name="overlay_strength" min="10" max="100" value="<?= ciH($settings['overlay_strength']) ?>"></div>
+      </div>
+      <label class="check"><input type="checkbox" name="animations" value="1" <?= ciChecked($settings, 'animations') ?>> Wounded movement and idle animations (needs an animation pack made for CHIM Injury Framework)<?= ciDefOnOff('animations') ?></label>
+      <div class="row">
+        <div><label>Animations from severity <span class="def">default: medium</span></label><select name="anim_min_severity"><?php foreach ([1 => 'light', 2 => 'medium', 3 => 'severe'] as $v => $l): ?><option value="<?= $v ?>" <?= (int)$settings['anim_min_severity'] === $v ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select></div>
       </div>
       <p class="hint">Uses free RaceMenu body overlay slots (<code>Body [Ovl#]</code>); body paints you placed yourself are never touched. If wounds are missing on the body, raise <code>iNumOverlays</code> under <code>[Overlays/Body]</code> in <code>skee64.ini</code>. The head has no wound overlays yet: head wounds are only described.</p>
     </section>

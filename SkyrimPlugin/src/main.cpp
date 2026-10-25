@@ -54,7 +54,7 @@ using namespace std::chrono_literals;
 
 namespace
 {
-    constexpr const char* kPluginVersion = "0.1.2";
+    constexpr const char* kPluginVersion = "0.1.3";
     constexpr const char* kPluginId = "chim_injury_framework";
     constexpr const char* kNotifyPrefix = "CHIM-injury: ";
     constexpr const char* kChimScript = "AIAgentFunctions";
@@ -93,6 +93,8 @@ namespace
         float healMinAmount{15.0f};
         float minSleepHours{6.0f};
         int overlayStrength{100};
+        bool animations{true};     // set state keywords for wound animation packs (CHIMInjury_Animations.esp)
+        int animMinSeverity{2};
         int logLevel{2};  // 0 error, 1 warn, 2 info, 3 debug
     };
 
@@ -164,6 +166,7 @@ namespace
         s.healMinAmount = std::clamp(s.healMinAmount, 0.0f, 1000.0f);
         s.minSleepHours = std::clamp(s.minSleepHours, 0.0f, 24.0f);
         s.overlayStrength = std::clamp(s.overlayStrength, 10, 100);
+        s.animMinSeverity = std::clamp(s.animMinSeverity, 1, 3);
     }
 
     void LoadIniSettings()
@@ -179,6 +182,8 @@ namespace
         s.showOverlays = ReadBool("Visuals", "bShowOverlays", s.showOverlays);
         s.showOnPlayer = ReadBool("Visuals", "bShowOnPlayer", s.showOnPlayer);
         s.overlayStrength = ReadInt("Visuals", "iOverlayStrength", s.overlayStrength);
+        s.animations = ReadBool("Visuals", "bAnimations", s.animations);
+        s.animMinSeverity = ReadInt("Visuals", "iAnimMinSeverity", s.animMinSeverity);
         s.minDamagePct = ReadFloat("Wounds", "fMinDamagePercent", s.minDamagePct);
         s.mediumDamagePct = ReadFloat("Wounds", "fMediumDamagePercent", s.mediumDamagePct);
         s.severeDamagePct = ReadFloat("Wounds", "fSevereDamagePercent", s.severeDamagePct);
@@ -1141,6 +1146,167 @@ namespace
 }
 
 // ========================================================================================
+// Animation state keywords. Optional: an animation pack can ship CHIMInjury_Animations.esp
+// (keywords only) and use HasKeyword conditions in OAR/DAR. The keywords are added to the
+// wounded actor's base form at runtime (like KID) and removed when the wounds heal.
+// ========================================================================================
+namespace
+{
+    constexpr const char* kAnimPlugin = "CHIMInjury_Animations.esp";
+    // Order = form IDs 0x800, 0x801, ... in CHIMInjury_Animations.esp. Keep in sync with tools/make_anim_plugin.py.
+    constexpr std::array<const char*, 24> kAnimKeywords = {
+        "CHIMInjury_Anim_Concussion", "CHIMInjury_Anim_SkullBroken", "CHIMInjury_Anim_SkullSevere",
+        "CHIMInjury_Anim_TorsoCut", "CHIMInjury_Anim_TorsoCutTreated", "CHIMInjury_Anim_RibsSoft", "CHIMInjury_Anim_RibsMiddle", "CHIMInjury_Anim_RibsSevere",
+        "CHIMInjury_Anim_ArmLCut", "CHIMInjury_Anim_ArmLCutTreated", "CHIMInjury_Anim_ArmLBroken", "CHIMInjury_Anim_ArmLSplinted",
+        "CHIMInjury_Anim_ArmRCut", "CHIMInjury_Anim_ArmRCutTreated", "CHIMInjury_Anim_ArmRBroken", "CHIMInjury_Anim_ArmRSplinted",
+        "CHIMInjury_Anim_LegLCut", "CHIMInjury_Anim_LegLCutTreated", "CHIMInjury_Anim_LegLBroken", "CHIMInjury_Anim_LegLSplinted",
+        "CHIMInjury_Anim_LegRCut", "CHIMInjury_Anim_LegRCutTreated", "CHIMInjury_Anim_LegRBroken", "CHIMInjury_Anim_LegRSplinted",
+    };
+    enum AnimBit : std::uint32_t
+    {
+        kAnimConcussion = 0, kAnimSkullBroken, kAnimSkullSevere,
+        kAnimTorsoCut, kAnimTorsoCutTreated, kAnimRibsSoft, kAnimRibsMiddle, kAnimRibsSevere,
+        kAnimLimbBase  // 4 per limb: cut, cut treated, broken, splinted; limbs: arm L, arm R, leg L, leg R
+    };
+
+    std::array<RE::BGSKeyword*, 24> g_animKw{};
+    bool g_animReady{false};
+    std::unordered_map<RE::FormID, std::uint32_t> g_animApplied;  // base NPC -> keyword bits we added
+
+    void DetectAnimKeywords()
+    {
+        auto data = RE::TESDataHandler::GetSingleton();
+        int found = 0;
+        for (size_t i = 0; i < kAnimKeywords.size(); ++i) {
+            RE::BGSKeyword* kw = data ? data->LookupForm<RE::BGSKeyword>(static_cast<RE::FormID>(0x800 + i), kAnimPlugin) : nullptr;
+            if (!kw) {
+                kw = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(kAnimKeywords[i]);
+            }
+            g_animKw[i] = kw;
+            found += kw ? 1 : 0;
+        }
+        g_animReady = found == static_cast<int>(kAnimKeywords.size());
+        logger::info("Wound animation keywords ({}): {}/{} found{}", kAnimPlugin, found, kAnimKeywords.size(),
+            g_animReady ? "" : found == 0 ? " (no animation pack installed)" : " (incomplete plugin, animations off)");
+    }
+
+    std::uint32_t AnimMask(RE::FormID id)
+    {
+        auto it = g_wounds.find(id);
+        if (!g_settings.enabled || !g_settings.animations || it == g_wounds.end()) {
+            return 0;
+        }
+        std::uint32_t mask = 0;
+        auto set = [&](std::uint32_t bit) { mask |= 1u << bit; };
+        for (auto& w : it->second.wounds) {
+            if (w.severity < g_settings.animMinSeverity) {
+                continue;
+            }
+            const bool blunt = w.type == WType::kBlunt;
+            const bool severe = w.severity >= 3;
+            int limb = -1;
+            switch (w.region) {
+            case Region::kHead:
+                if (blunt) {
+                    set(severe ? kAnimSkullBroken : kAnimConcussion);
+                    if (severe && !w.treated) {
+                        set(kAnimSkullSevere);
+                    }
+                } else if (severe && !w.treated) {
+                    set(kAnimConcussion);
+                }
+                break;
+            case Region::kChest:
+            case Region::kBack:
+                if (blunt) {
+                    set(!severe ? kAnimRibsSoft : w.treated ? kAnimRibsMiddle : kAnimRibsSevere);
+                } else {
+                    set(w.treated ? kAnimTorsoCutTreated : kAnimTorsoCut);
+                }
+                break;
+            case Region::kLeftArm: limb = 0; break;
+            case Region::kRightArm: limb = 1; break;
+            case Region::kLeftLeg: limb = 2; break;
+            case Region::kRightLeg: limb = 3; break;
+            default: break;
+            }
+            if (limb >= 0) {
+                const std::uint32_t base = kAnimLimbBase + static_cast<std::uint32_t>(limb) * 4;
+                if (!blunt) {
+                    set(base + (w.treated ? 1 : 0));
+                } else if (severe) {
+                    set(base + (w.treated ? 3 : 2));
+                }
+            }
+        }
+        // An open wound wins over a treated one in the same place.
+        auto exclusive = [&](std::uint32_t open, std::uint32_t treated) {
+            if (mask & (1u << open)) {
+                mask &= ~(1u << treated);
+            }
+        };
+        exclusive(kAnimTorsoCut, kAnimTorsoCutTreated);
+        for (std::uint32_t limb = 0; limb < 4; ++limb) {
+            exclusive(kAnimLimbBase + limb * 4, kAnimLimbBase + limb * 4 + 1);
+            exclusive(kAnimLimbBase + limb * 4 + 2, kAnimLimbBase + limb * 4 + 3);
+        }
+        return mask;
+    }
+
+    void SetAnimBits(RE::TESNPC* npc, std::uint32_t want)
+    {
+        if (!npc) {
+            return;
+        }
+        auto found = g_animApplied.find(npc->GetFormID());
+        if ((found == g_animApplied.end() ? 0u : found->second) == want) {
+            return;
+        }
+        auto& have = g_animApplied[npc->GetFormID()];
+        for (size_t i = 0; i < g_animKw.size(); ++i) {
+            const std::uint32_t bit = 1u << i;
+            if (!g_animKw[i] || ((have ^ want) & bit) == 0) {
+                continue;
+            }
+            if (want & bit) {
+                npc->AddKeyword(g_animKw[i]);
+            } else {
+                npc->RemoveKeyword(g_animKw[i]);
+            }
+        }
+        have = want;
+        if (want == 0) {
+            g_animApplied.erase(npc->GetFormID());
+        }
+    }
+
+    void ApplyAnimKeywords(RE::Actor* actor)
+    {
+        if (!g_animReady || !actor) {
+            return;
+        }
+        const auto want = AnimMask(actor->GetFormID());
+        auto npc = actor->GetActorBase();
+        SetAnimBits(npc, want);
+        if (npc) {
+            logger::debug("{}: animation keywords {:06X}", ActorName(actor), want);
+        }
+    }
+
+    void ClearAnimKeywords()
+    {
+        std::vector<RE::FormID> bases;
+        for (auto& [id, bits] : g_animApplied) {
+            bases.push_back(id);
+        }
+        for (auto id : bases) {
+            SetAnimBits(RE::TESForm::LookupByID<RE::TESNPC>(id), 0);
+        }
+        g_animApplied.clear();
+    }
+}
+
+// ========================================================================================
 // Wounds: creation, healing, sleeping
 // ========================================================================================
 namespace
@@ -1173,6 +1339,7 @@ namespace
         g_stateDirty = true;
         if (auto actor = LookupActor(id)) {
             RequestOverlays(actor);
+            ApplyAnimKeywords(actor);
         }
     }
 
@@ -1712,6 +1879,7 @@ namespace
         if (auto it = g_wounds.find(id); it != g_wounds.end()) {
             g_wounds.erase(it);
             g_stateDirty = true;
+            ApplyAnimKeywords(actor);
         }
     }
 
@@ -1781,6 +1949,7 @@ namespace
             }
             if (auto actor = LookupActor(id)) {
                 RequestOverlays(actor);
+                ApplyAnimKeywords(actor);  // cheap: only changes keywords when the wanted set differs
             }
         }
     }
@@ -2029,6 +2198,8 @@ namespace
         f("heal_min_amount", s.healMinAmount);
         f("min_sleep_hours", s.minSleepHours);
         i("overlay_strength", s.overlayStrength);
+        b("animations", s.animations);
+        i("anim_min_severity", s.animMinSeverity);
         ClampSettings(s);
         const bool debugChanged = s.debug != g_settings.debug;
         const bool visualsChanged = s.showOverlays != g_settings.showOverlays || s.showOnPlayer != g_settings.showOnPlayer ||
@@ -2144,12 +2315,12 @@ namespace
         g_stateDirty = false;
         return std::format(
             "{{\"plugin\":\"{}\",\"version\":\"{}\",\"game_version\":\"{}\",\"server_from\":\"{}\",\"game_loaded\":{},"
-            "\"racemenu_loaded\":{},\"racemenu_version\":\"{}\",\"overlay_slots\":{},\"overlay_player_only\":{},\"overlay_slots_short\":{},"
+            "\"racemenu_loaded\":{},\"racemenu_version\":\"{}\",\"overlay_slots\":{},\"overlay_player_only\":{},\"overlay_slots_short\":{},\"anim_plugin\":{},\"anim_actors\":{},"
             "\"enabled\":{},\"debug\":{},\"tracked\":{},\"wounds\":{},\"hits_seen\":{},\"wounds_made\":{},\"healed_magic\":{},"
             "\"healed_rest\":{},\"healed_time\":{},\"logged_to_chim\":{},\"overlays_applied\":{},\"failures\":{},\"cmd_done\":{},"
             "\"last_error\":\"{}\",\"state\":{},\"log_lines\":[{}]}}",
             kPluginId, kPluginVersion, JsonEscape(runtime), g_server.fromIni ? "CHIMInjury.ini" : "auto", g_gameReady,
-            g_overlay.skeeLoaded, JsonEscape(g_overlay.skeeVersion), g_overlay.numOverlays, g_overlay.playerOnly, g_overlaySlotsShort.load(),
+            g_overlay.skeeLoaded, JsonEscape(g_overlay.skeeVersion), g_overlay.numOverlays, g_overlay.playerOnly, g_overlaySlotsShort.load(), g_animReady, g_animApplied.size(),
             g_settings.enabled, g_settings.debug, g_tracked.size(), woundCount, g_statHits.load(), g_statWounds.load(),
             g_statHealedMagic.load(), g_statHealedRest.load(), g_statHealedTime.load(), g_statLogged.load(), g_statOverlayApplied.load(),
             g_statFailures.load(), g_lastCommand, JsonEscape(lastError), state, lines);
@@ -2327,6 +2498,7 @@ namespace
 
     void OnRevert(SKSE::SerializationInterface*)
     {
+        ClearAnimKeywords();  // base forms keep runtime keywords until the game closes
         g_wounds.clear();
         g_pending.clear();
         g_healthSample.clear();
@@ -2430,6 +2602,7 @@ namespace
         switch (message->type) {
         case SKSE::MessagingInterface::kDataLoaded:
             DetectOverlays();
+            DetectAnimKeywords();
             if (auto holder = RE::ScriptEventSourceHolder::GetSingleton()) {
                 holder->AddEventSink<RE::TESHitEvent>(HitSink::Get());
                 holder->AddEventSink<RE::TESMagicEffectApplyEvent>(MagicSink::Get());
