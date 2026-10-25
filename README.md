@@ -8,7 +8,7 @@ CHIM Injury Framework is an add-on for [CHIM](https://www.nexusmods.com/skyrimsp
 
 > "Hold still. That cut on your arm is still bleeding, and I'm not carrying you back to Whiterun."
 
-> **Status: 0.1.1, first test version.** In-game testing on Nolvus (Skyrim AE) is in progress. Please report results (see [Feedback](#feedback)).
+> **Status: 0.1.2, test version.** Works in game on Nolvus (Skyrim SE 1.5.97) with RaceMenu; testing continues. Please report results (see [Feedback](#feedback)).
 
 ## ⬇ Download
 
