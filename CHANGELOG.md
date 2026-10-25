@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+The framework now covers words, body textures and animations, so the version jumps to 0.3.
+
+- Wound animations now play in episodes by default: a few seconds of holding the wound (5–10 s), then a pause (20–25 s), then again. A new wound starts with an episode right away. Times and "always on" can be set on the plugin page.
+- Fixed: the plugin page saved healing days as 1.05 and 3.05 instead of 1 and 3 (browser number step).
+
 ## 0.1.3
 
 - Support for wound animation packs: when `CHIMInjury_Animations.esp` (keywords only) is installed, wounded people get state keywords (concussion, broken skull, torso cut, broken ribs, cut / broken / splinted arms and legs) that OAR/DAR conditions can use. Works for the player and followers. Settings: on/off and from which severity (default medium).

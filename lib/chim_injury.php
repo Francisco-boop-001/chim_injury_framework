@@ -10,7 +10,7 @@ if (defined('CHIM_INJURY_VERSION')) {
     return;
 }
 
-define('CHIM_INJURY_VERSION', '0.1.3');
+define('CHIM_INJURY_VERSION', '0.3.0');
 define('CHIM_INJURY_PLUGIN', 'chim_injury_framework');
 define('CHIM_INJURY_TABLE', 'plugins.chim_injury_settings');
 define('CHIM_INJURY_LOG_TABLE', 'plugins.chim_injury_log');
@@ -45,6 +45,11 @@ function chimInjuryGameKeys(): array
         'overlay_strength' => 'int',
         'animations' => 'bool',
         'anim_min_severity' => 'int',
+        'anim_episodes' => 'bool',
+        'anim_on_min_seconds' => 'float',
+        'anim_on_max_seconds' => 'float',
+        'anim_off_min_seconds' => 'float',
+        'anim_off_max_seconds' => 'float',
     ];
 }
 
@@ -73,6 +78,11 @@ function chimInjuryDefaults(): array
         'overlay_strength' => '100',
         'animations' => '1',
         'anim_min_severity' => '2',
+        'anim_episodes' => '1',
+        'anim_on_min_seconds' => '5',
+        'anim_on_max_seconds' => '10',
+        'anim_off_min_seconds' => '20',
+        'anim_off_max_seconds' => '25',
         // Prompt (server only)
         'inject_self' => '1',
         'inject_nearby' => '1',

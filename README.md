@@ -8,7 +8,7 @@ CHIM Injury Framework is an add-on for [CHIM](https://www.nexusmods.com/skyrimsp
 
 > "Hold still. That cut on your arm is still bleeding, and I'm not carrying you back to Whiterun."
 
-> **Status: 0.1.3, test version.** Works in game on Nolvus (Skyrim SE 1.5.97) with RaceMenu; testing continues. Please report results (see [Feedback](#feedback)).
+> **Status: 0.3.0, test version.** Works in game on Nolvus (Skyrim SE 1.5.97) with RaceMenu; testing continues. Please report results (see [Feedback](#feedback)).
 
 ## ⬇ Download
 
@@ -138,7 +138,7 @@ RaceMenu has 6 body overlay slots by default (`iNumOverlays` under `[Overlays/Bo
 
 ## For animation pack authors
 
-CHIM Injury Framework does not ship animations, but it tells OAR/DAR what state a wounded person is in. Ship `CHIMInjury_Animations.esp` with your pack (make it with `python tools/make_anim_plugin.py`, ESL-flagged, keywords only) and use conditions like `HasKeyword("CHIMInjury_Animations.esp"|0x000808)`. The DLL adds the keywords to the wounded person's base form and removes them when the wounds heal (player and followers, from the severity set on the plugin page).
+CHIM Injury Framework does not ship animations, but it tells OAR/DAR what state a wounded person is in. Ship `CHIMInjury_Animations.esp` with your pack (make it with `python tools/make_anim_plugin.py`, ESL-flagged, keywords only) and use conditions like `HasKeyword("CHIMInjury_Animations.esp"|0x000808)`. The DLL adds the keywords to the wounded person's base form and removes them when the wounds heal (player and followers, from the severity set on the plugin page). By default the keywords come and go in episodes (on 5–10 s, off 20–25 s), so the animations play now and then.
 
 | Form ID | Keyword | Set when |
 |---|---|---|

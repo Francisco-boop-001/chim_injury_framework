@@ -54,7 +54,7 @@ using namespace std::chrono_literals;
 
 namespace
 {
-    constexpr const char* kPluginVersion = "0.1.3";
+    constexpr const char* kPluginVersion = "0.3.0";
     constexpr const char* kPluginId = "chim_injury_framework";
     constexpr const char* kNotifyPrefix = "CHIM-injury: ";
     constexpr const char* kChimScript = "AIAgentFunctions";
@@ -95,6 +95,11 @@ namespace
         int overlayStrength{100};
         bool animations{true};     // set state keywords for wound animation packs (CHIMInjury_Animations.esp)
         int animMinSeverity{2};
+        bool animEpisodes{true};   // play the wounded animations in short episodes instead of all the time
+        float animOnMin{5.0f};
+        float animOnMax{10.0f};
+        float animOffMin{20.0f};
+        float animOffMax{25.0f};
         int logLevel{2};  // 0 error, 1 warn, 2 info, 3 debug
     };
 
@@ -167,6 +172,10 @@ namespace
         s.minSleepHours = std::clamp(s.minSleepHours, 0.0f, 24.0f);
         s.overlayStrength = std::clamp(s.overlayStrength, 10, 100);
         s.animMinSeverity = std::clamp(s.animMinSeverity, 1, 3);
+        s.animOnMin = std::clamp(s.animOnMin, 1.0f, 600.0f);
+        s.animOnMax = std::clamp(s.animOnMax, s.animOnMin, 600.0f);
+        s.animOffMin = std::clamp(s.animOffMin, 0.0f, 3600.0f);
+        s.animOffMax = std::clamp(s.animOffMax, s.animOffMin, 3600.0f);
     }
 
     void LoadIniSettings()
@@ -184,6 +193,11 @@ namespace
         s.overlayStrength = ReadInt("Visuals", "iOverlayStrength", s.overlayStrength);
         s.animations = ReadBool("Visuals", "bAnimations", s.animations);
         s.animMinSeverity = ReadInt("Visuals", "iAnimMinSeverity", s.animMinSeverity);
+        s.animEpisodes = ReadBool("Visuals", "bAnimEpisodes", s.animEpisodes);
+        s.animOnMin = ReadFloat("Visuals", "fAnimOnMinSeconds", s.animOnMin);
+        s.animOnMax = ReadFloat("Visuals", "fAnimOnMaxSeconds", s.animOnMax);
+        s.animOffMin = ReadFloat("Visuals", "fAnimOffMinSeconds", s.animOffMin);
+        s.animOffMax = ReadFloat("Visuals", "fAnimOffMaxSeconds", s.animOffMax);
         s.minDamagePct = ReadFloat("Wounds", "fMinDamagePercent", s.minDamagePct);
         s.mediumDamagePct = ReadFloat("Wounds", "fMediumDamagePercent", s.mediumDamagePct);
         s.severeDamagePct = ReadFloat("Wounds", "fSevereDamagePercent", s.severeDamagePct);
@@ -1173,6 +1187,20 @@ namespace
     bool g_animReady{false};
     std::unordered_map<RE::FormID, std::uint32_t> g_animApplied;  // base NPC -> keyword bits we added
 
+    // Episodes: the wounded animations play for a few seconds, then pause, then play again.
+    struct AnimPhase
+    {
+        bool on{false};
+        std::chrono::steady_clock::time_point until{};
+    };
+    std::unordered_map<RE::FormID, AnimPhase> g_animPhase;  // actor -> current episode
+
+    float RandomSeconds(float lo, float hi)
+    {
+        std::uniform_real_distribution<float> dist(lo, std::max(lo, hi));
+        return dist(Rng());
+    }
+
     void DetectAnimKeywords()
     {
         auto data = RE::TESDataHandler::GetSingleton();
@@ -1274,6 +1302,7 @@ namespace
                 npc->RemoveKeyword(g_animKw[i]);
             }
         }
+        logger::debug("Animation keywords of {} ({:08X}): {:06X}", npc->GetName(), npc->GetFormID(), want);
         have = want;
         if (want == 0) {
             g_animApplied.erase(npc->GetFormID());
@@ -1285,12 +1314,25 @@ namespace
         if (!g_animReady || !actor) {
             return;
         }
-        const auto want = AnimMask(actor->GetFormID());
+        auto want = AnimMask(actor->GetFormID());
+        if (want == 0 || !g_settings.animEpisodes) {
+            g_animPhase.erase(actor->GetFormID());
+        } else {
+            const auto now = std::chrono::steady_clock::now();
+            auto [it, fresh] = g_animPhase.try_emplace(actor->GetFormID());
+            auto& phase = it->second;
+            if (fresh || now >= phase.until) {
+                phase.on = fresh ? true : !phase.on;  // a new wound starts with an episode right away
+                const float seconds = phase.on ? RandomSeconds(g_settings.animOnMin, g_settings.animOnMax)
+                                               : RandomSeconds(g_settings.animOffMin, g_settings.animOffMax);
+                phase.until = now + std::chrono::milliseconds(static_cast<int>(seconds * 1000.0f));
+            }
+            if (!phase.on) {
+                want = 0;
+            }
+        }
         auto npc = actor->GetActorBase();
         SetAnimBits(npc, want);
-        if (npc) {
-            logger::debug("{}: animation keywords {:06X}", ActorName(actor), want);
-        }
     }
 
     void ClearAnimKeywords()
@@ -1969,6 +2011,15 @@ namespace
                 g_healthSample[id] = { Health(actor), now };
             }
         }
+        if (g_animReady) {
+            for (auto& [id, entry] : g_wounds) {
+                if (!entry.wounds.empty() || g_animPhase.contains(id)) {
+                    if (auto actor = LookupActor(id)) {
+                        ApplyAnimKeywords(actor);
+                    }
+                }
+            }
+        }
         if (++g_tickCount % 8 != 0) {
             return;
         }
@@ -2200,6 +2251,11 @@ namespace
         i("overlay_strength", s.overlayStrength);
         b("animations", s.animations);
         i("anim_min_severity", s.animMinSeverity);
+        b("anim_episodes", s.animEpisodes);
+        f("anim_on_min_seconds", s.animOnMin);
+        f("anim_on_max_seconds", s.animOnMax);
+        f("anim_off_min_seconds", s.animOffMin);
+        f("anim_off_max_seconds", s.animOffMax);
         ClampSettings(s);
         const bool debugChanged = s.debug != g_settings.debug;
         const bool visualsChanged = s.showOverlays != g_settings.showOverlays || s.showOnPlayer != g_settings.showOnPlayer ||
@@ -2499,6 +2555,7 @@ namespace
     void OnRevert(SKSE::SerializationInterface*)
     {
         ClearAnimKeywords();  // base forms keep runtime keywords until the game closes
+        g_animPhase.clear();
         g_wounds.clear();
         g_pending.clear();
         g_healthSample.clear();

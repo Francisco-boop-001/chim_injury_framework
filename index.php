@@ -46,7 +46,7 @@ function ciHealsIn(array $w): string
     return 'in about ' . number_format($days, 1) . ' days';
 }
 
-const CI_BOOLS = ['enabled', 'debug', 'track_player', 'track_followers', 'show_overlays', 'show_on_player', 'animations', 'notifications', 'log_to_chim',
+const CI_BOOLS = ['enabled', 'debug', 'track_player', 'track_followers', 'show_overlays', 'show_on_player', 'animations', 'anim_episodes', 'notifications', 'log_to_chim',
     'inject_self', 'inject_nearby'];
 // key => [min, max, integer]
 const CI_NUMBERS = [
@@ -62,6 +62,10 @@ const CI_NUMBERS = [
     'min_sleep_hours' => [0, 24, false],
     'overlay_strength' => [10, 100, true],
     'anim_min_severity' => [1, 3, true],
+    'anim_on_min_seconds' => [1, 600, false],
+    'anim_on_max_seconds' => [1, 600, false],
+    'anim_off_min_seconds' => [0, 3600, false],
+    'anim_off_max_seconds' => [0, 3600, false],
 ];
 const CI_TEXTS = ['self_template', 'nearby_template'];
 
@@ -108,6 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $values['medium_damage_pct'] = (string)max((float)$values['min_damage_pct'], (float)$values['medium_damage_pct']);
         $values['severe_damage_pct'] = (string)max((float)$values['medium_damage_pct'], (float)$values['severe_damage_pct']);
+        $values['anim_on_max_seconds'] = (string)max((float)$values['anim_on_min_seconds'], (float)$values['anim_on_max_seconds']);
+        $values['anim_off_max_seconds'] = (string)max((float)$values['anim_off_min_seconds'], (float)$values['anim_off_max_seconds']);
         foreach (CI_TEXTS as $key) {
             $values[$key] = trim(mb_substr((string)($_POST[$key] ?? ''), 0, 600));
         }
@@ -290,6 +296,12 @@ usort($actors, static fn($a, $b) => [empty($a['player']), -count($a['wounds'] ??
       <div class="row">
         <div><label>Animations from severity <span class="def">default: medium</span></label><select name="anim_min_severity"><?php foreach ([1 => 'light', 2 => 'medium', 3 => 'severe'] as $v => $l): ?><option value="<?= $v ?>" <?= (int)$settings['anim_min_severity'] === $v ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select></div>
       </div>
+      <label class="check"><input type="checkbox" name="anim_episodes" value="1" <?= ciChecked($settings, 'anim_episodes') ?>> Play them now and then, not all the time<?= ciDefOnOff('anim_episodes') ?></label>
+      <div class="row">
+        <div><label>Plays for (s) <span class="def">default: <?= ciH(chimInjuryDefaults()['anim_on_min_seconds']) ?>–<?= ciH(chimInjuryDefaults()['anim_on_max_seconds']) ?> s</span></label><input type="number" step="any" name="anim_on_min_seconds" min="1" max="600" value="<?= ciH($settings['anim_on_min_seconds']) ?>"> – <input type="number" step="any" name="anim_on_max_seconds" min="1" max="600" value="<?= ciH($settings['anim_on_max_seconds']) ?>"></div>
+        <div><label>Then pauses for (s) <span class="def">default: <?= ciH(chimInjuryDefaults()['anim_off_min_seconds']) ?>–<?= ciH(chimInjuryDefaults()['anim_off_max_seconds']) ?> s</span></label><input type="number" step="any" name="anim_off_min_seconds" min="0" max="3600" value="<?= ciH($settings['anim_off_min_seconds']) ?>"> – <input type="number" step="any" name="anim_off_max_seconds" min="0" max="3600" value="<?= ciH($settings['anim_off_max_seconds']) ?>"></div>
+      </div>
+      <p class="hint">A new wound starts with an episode right away. The change shows when the current animation ends (the next step or idle loop).</p>
       <p class="hint">Uses free RaceMenu body overlay slots (<code>Body [Ovl#]</code>); body paints you placed yourself are never touched. If wounds are missing on the body, raise <code>iNumOverlays</code> under <code>[Overlays/Body]</code> in <code>skee64.ini</code>. The head has no wound overlays yet: head wounds are only described.</p>
     </section>
 
@@ -306,8 +318,8 @@ usort($actors, static fn($a, $b) => [empty($a['player']), -count($a['wounds'] ??
     <section>
       <h2>Healing</h2>
       <div class="row">
-        <div><label>Light wounds heal after (game days)<?= ciDef('light_heal_days') ?></label><input type="number" step="0.25" name="light_heal_days" min="0.05" max="60" value="<?= ciH($settings['light_heal_days']) ?>"></div>
-        <div><label>Medium wounds heal after (game days)<?= ciDef('medium_heal_days') ?></label><input type="number" step="0.25" name="medium_heal_days" min="0.05" max="60" value="<?= ciH($settings['medium_heal_days']) ?>"></div>
+        <div><label>Light wounds heal after (game days)<?= ciDef('light_heal_days') ?></label><input type="number" step="any" name="light_heal_days" min="0.05" max="60" value="<?= ciH($settings['light_heal_days']) ?>"></div>
+        <div><label>Medium wounds heal after (game days)<?= ciDef('medium_heal_days') ?></label><input type="number" step="any" name="medium_heal_days" min="0.05" max="60" value="<?= ciH($settings['medium_heal_days']) ?>"></div>
         <div><label>Smallest potion or spell that heals<?= ciDef('heal_min_amount', ' HP') ?></label><input type="number" name="heal_min_amount" min="0" max="1000" value="<?= ciH($settings['heal_min_amount']) ?>"><p class="hint">Concentration healing spells (Healing, Healing Hands) always count. Food and regeneration enchantments never do.</p></div>
         <div><label>Sleep needed (hours in a bed)<?= ciDef('min_sleep_hours', ' h') ?></label><input type="number" step="0.5" name="min_sleep_hours" min="0" max="24" value="<?= ciH($settings['min_sleep_hours']) ?>"></div>
       </div>
